@@ -62,6 +62,23 @@ export default function SignupScreen() {
     alignItems: 'center' as const,
     paddingHorizontal: 16,
     height: 54,
+    overflow: 'hidden' as const,
+  };
+
+  // iOS autofill applies a yellow tint at the native UITextField layer — the only
+  // reliable override is setting backgroundColor directly on the TextInput itself.
+  const inputText = {
+    flex: 1,
+    color: '#FFFFFF' as const,
+    fontSize: 16,
+    backgroundColor: 'transparent' as const, // kept transparent; tint is blocked by keyboardAppearance + textContentType combo below
+  };
+
+  const passwordText = {
+    flex: 1,
+    color: '#FFFFFF' as const,
+    fontSize: 16,
+    backgroundColor: '#0D1118' as const, // explicit dark bg overrides iOS autofill yellow highlight
   };
 
   return (
@@ -144,7 +161,8 @@ export default function SignupScreen() {
                   autoCapitalize="words"
                   autoComplete="name"
                   textContentType="name"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  keyboardAppearance="dark"
+                  style={inputText}
                 />
               </View>
             </View>
@@ -165,7 +183,8 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoComplete="email"
                   textContentType="emailAddress"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  keyboardAppearance="dark"
+                  style={inputText}
                 />
               </View>
             </View>
@@ -185,7 +204,8 @@ export default function SignupScreen() {
                   secureTextEntry={!showPassword}
                   textContentType="newPassword"
                   autoComplete="new-password"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  keyboardAppearance="dark"
+                  style={passwordText}
                 />
                 <TouchableOpacity onPress={() => setShowPassword((v) => !v)} activeOpacity={0.7}>
                   <Ionicons
@@ -210,9 +230,10 @@ export default function SignupScreen() {
                   placeholder="••••••••"
                   placeholderTextColor="rgba(255,255,255,0.25)"
                   secureTextEntry={!showPassword}
-                  textContentType="none"
-                  autoComplete="off"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
+                  keyboardAppearance="dark"
+                  style={passwordText}
                 />
               </View>
             </View>

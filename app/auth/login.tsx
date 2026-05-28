@@ -106,7 +106,9 @@ export default function LoginScreen() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  textContentType="emailAddress"
+                  keyboardAppearance="dark"
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: 'transparent' }}
                 />
               </View>
             </View>
@@ -126,6 +128,7 @@ export default function LoginScreen() {
                   alignItems: 'center',
                   paddingHorizontal: 16,
                   height: 54,
+                  overflow: 'hidden',
                 }}
               >
                 <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.35)" style={{ marginRight: 12 }} />
@@ -137,7 +140,8 @@ export default function LoginScreen() {
                   secureTextEntry={!showPassword}
                   textContentType="password"
                   autoComplete="current-password"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16 }}
+                  keyboardAppearance="dark"
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: '#0D1118' }}
                 />
                 <TouchableOpacity onPress={() => setShowPassword((v) => !v)} activeOpacity={0.7}>
                   <Ionicons
