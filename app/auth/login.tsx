@@ -87,7 +87,7 @@ export default function LoginScreen() {
               </Text>
               <View
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: '#191C22',
                   borderRadius: 16,
                   borderWidth: 1,
                   borderColor: 'rgba(255,255,255,0.10)',
@@ -95,6 +95,7 @@ export default function LoginScreen() {
                   alignItems: 'center',
                   paddingHorizontal: 16,
                   height: 54,
+                  overflow: 'hidden',
                 }}
               >
                 <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.35)" style={{ marginRight: 12 }} />
@@ -108,7 +109,7 @@ export default function LoginScreen() {
                   autoComplete="email"
                   textContentType="emailAddress"
                   keyboardAppearance="dark"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: 'transparent' }}
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: '#191C22' }}
                 />
               </View>
             </View>
@@ -120,7 +121,7 @@ export default function LoginScreen() {
               </Text>
               <View
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: '#191C22',
                   borderRadius: 16,
                   borderWidth: 1,
                   borderColor: 'rgba(255,255,255,0.10)',
@@ -141,7 +142,7 @@ export default function LoginScreen() {
                   textContentType="password"
                   autoComplete="current-password"
                   keyboardAppearance="dark"
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: '#0D1118' }}
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 16, backgroundColor: '#191C22' }}
                 />
                 <TouchableOpacity onPress={() => setShowPassword((v) => !v)} activeOpacity={0.7}>
                   <Ionicons

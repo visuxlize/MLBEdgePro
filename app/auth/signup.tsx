@@ -52,9 +52,13 @@ export default function SignupScreen() {
     router.replace('/(tabs)/games' as any);
   };
 
-  // ── Input row style helper ────────────────────────────────────────────────
+  // rgba(255,255,255,0.06) composited on #0A0E14 ≈ #191C22.
+  // Using the same solid color on both the container and every TextInput means
+  // iOS autofill has nothing to tint — no yellow bleed, no black bar mismatch.
+  const FIELD_BG = '#191C22' as const;
+
   const inputRow = {
-    backgroundColor: 'rgba(255,255,255,0.06)' as const,
+    backgroundColor: FIELD_BG,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)' as const,
@@ -65,21 +69,14 @@ export default function SignupScreen() {
     overflow: 'hidden' as const,
   };
 
-  // iOS autofill applies a yellow tint at the native UITextField layer — the only
-  // reliable override is setting backgroundColor directly on the TextInput itself.
   const inputText = {
     flex: 1,
     color: '#FFFFFF' as const,
     fontSize: 16,
-    backgroundColor: 'transparent' as const, // kept transparent; tint is blocked by keyboardAppearance + textContentType combo below
+    backgroundColor: FIELD_BG,
   };
 
-  const passwordText = {
-    flex: 1,
-    color: '#FFFFFF' as const,
-    fontSize: 16,
-    backgroundColor: '#0D1118' as const, // explicit dark bg overrides iOS autofill yellow highlight
-  };
+  const passwordText = inputText;
 
   return (
     <LinearGradient colors={['#0A0E14', '#0D1220', '#0A0E14']} style={{ flex: 1 }}>
