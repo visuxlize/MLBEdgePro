@@ -38,6 +38,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "31da536f-2ce4-4a8d-babd-c842c2bc39b3"
+      }
+    },
+    "owner": "visuxlize"
   }
 }
