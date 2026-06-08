@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,7 +125,7 @@ function ProbBar({ pct, color }: { pct: number; color: string }) {
 
 function ViewToggle({ active, onChange }: { active: ScreenView; onChange: (v: ScreenView) => void }) {
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 4, marginHorizontal: 18, marginBottom: 16 }}>
+    <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 4, flex: 1 }}>
       {(['dashboard', 'builder'] as ScreenView[]).map((v) => {
         const isActive = active === v;
         return (
@@ -698,10 +698,21 @@ function DailySlipCard({ dailySlip, onSave, onSwitchBuilder }: { dailySlip: Dail
       {/* Legs */}
       <View style={{ marginBottom: 12 }}>
         {dailySlip.legs.map((leg) => (
-          <View key={leg.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: propColor(leg.probability), marginRight: 8 }} />
-            <Text style={{ flex: 1, color: 'rgba(255,255,255,0.70)', fontSize: 11, fontWeight: '600' }} numberOfLines={1}>{leg.description}</Text>
-            <Text style={{ color: propColor(leg.probability), fontSize: 11, fontWeight: '800', marginLeft: 6 }}>{leg.probability}%</Text>
+          <View key={leg.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', gap: 9 }}>
+            {leg.playerId ? (
+              <PlayerHeadshot playerId={leg.playerId} playerName={leg.playerName} size={30} />
+            ) : leg.teamId ? (
+              <TeamLogo teamId={leg.teamId} teamName={leg.teamName ?? leg.playerName} size={30} />
+            ) : (
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: `${propColor(leg.probability)}22`, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: propColor(leg.probability) }} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700' }} numberOfLines={1}>{leg.description}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 1 }}>{leg.propType}</Text>
+            </View>
+            <Text style={{ color: propColor(leg.probability), fontSize: 12, fontWeight: '900' }}>{leg.probability}%</Text>
           </View>
         ))}
       </View>
@@ -915,12 +926,14 @@ export default function PropsScreen() {
   const { data: games, isLoading } = useGames();
   const insets = useSafeAreaInsets();
   const { scrollHandler, scrollEventThrottle } = useTabBarScroll();
+  const queryClient = useQueryClient();
 
   const [screenView, setScreenView] = useState<ScreenView>('dashboard');
   const [selectedGamePk, setSelectedGamePk] = useState<number | null>(null);
   const [activeProp, setActiveProp] = useState<PropType>('HR');
   const [slip, setSlip] = useState<SlipEntry[]>([]);
   const [slipOpen, setSlipOpen] = useState(false);
+  const [isDashRefreshing, setIsDashRefreshing] = useState(false);
 
   const tabBarBottomPos = insets.bottom > 0 ? insets.bottom + 6 : 18;
   const fabBottom = tabBarBottomPos + TAB_BAR_HEIGHT + 14;
@@ -934,6 +947,14 @@ export default function PropsScreen() {
     () => selectedGamePk ? gamesWithPitchers.find((g) => g.gamePk === selectedGamePk) ?? gamesWithPitchers[0] : gamesWithPitchers[0],
     [selectedGamePk, gamesWithPitchers],
   );
+
+  const handleRefreshDashboard = useCallback(() => {
+    if (isDashRefreshing) return;
+    setIsDashRefreshing(true);
+    const cacheKey = gamesWithPitchers.slice(0, 6).map(g => g.gamePk).join(',');
+    queryClient.invalidateQueries({ queryKey: ['daily-slips', cacheKey] });
+    setTimeout(() => setIsDashRefreshing(false), 2000);
+  }, [isDashRefreshing, queryClient, gamesWithPitchers]);
 
   const addToSlip = useCallback((entry: SlipEntry) => {
     setSlip((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry]));
@@ -984,8 +1005,33 @@ export default function PropsScreen() {
           </Text>
         </View>
 
-        {/* View toggle */}
-        <ViewToggle active={screenView} onChange={setScreenView} />
+        {/* View toggle + refresh */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, marginBottom: 16, gap: 10 }}>
+          <ViewToggle active={screenView} onChange={setScreenView} />
+          {screenView === 'dashboard' && (
+            <TouchableOpacity
+              onPress={handleRefreshDashboard}
+              activeOpacity={0.75}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 13,
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderWidth: 1,
+                borderColor: isDashRefreshing ? 'rgba(255,120,40,0.40)' : 'rgba(255,255,255,0.10)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {isDashRefreshing ? (
+                <ActivityIndicator size="small" color="#FF7828" />
+              ) : (
+                <Ionicons name="reload" size={17} color="rgba(255,255,255,0.55)" />
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Dashboard */}
         {screenView === 'dashboard' && (
