@@ -142,11 +142,55 @@ export function buildGamePrediction(
 
 // HR probability for a batter based on opposing pitcher
 export function hrProbability(batterHrPerAb: number, pitcherEra: number): number {
-  // Base HR rate vs ERA-adjusted difficulty
-  const leagueHrRate = 0.033;
-  const pitcherFactor = pitcherEra / 4.5; // 1.0 = league avg, >1 = hittable
+  const pitcherFactor = pitcherEra / 4.5;
   const prob = batterHrPerAb * pitcherFactor;
   return Math.min(0.35, Math.max(0.04, prob));
+}
+
+// Enhanced HR probability using HR Nuke model — higher fidelity, matches web deep-dive
+export function hrNukeProbability(
+  batterHrPerAb: number,
+  pitcherEra: number | string,
+  batterOps: number | string,
+): number {
+  const era = parseFloat(String(pitcherEra)) || 4.5;
+  const ops = parseFloat(String(batterOps)) || 0.700;
+  const power = Math.min(1, Math.max(0, (ops - 0.62) / 0.38));
+  const base = Math.max(0, batterHrPerAb) * 100 * (era / 4.5) * 3.8;
+  return Math.min(35, Math.max(4, Math.round(base + power * 5)));
+}
+
+// Returns true when the matchup grades A or A+ — show "HOT" badge
+export function hrHotFlag(pct: number, batterOps: number | string, pitcherEra: number | string): boolean {
+  const ops = parseFloat(String(batterOps)) || 0.700;
+  const era = parseFloat(String(pitcherEra)) || 4.5;
+  const power = Math.min(1, Math.max(0, (ops - 0.62) / 0.38));
+  const vulnerability = Math.max(0, (era - 3.2) / 2.8);
+  return pct >= 16 || (pct + power * 24 + vulnerability * 16) >= 44;
+}
+
+// Returns true when player is statistically overdue for a HR — show "DUE" badge
+export function hrDueFlag(hrPerAb: number, batterOps: number | string, atBats: number): boolean {
+  if (atBats < 80) return false;
+  const ops = parseFloat(String(batterOps)) || 0.700;
+  const power = Math.min(1, Math.max(0, (ops - 0.62) / 0.38));
+  const expectedRate = 0.028 + power * 0.040;
+  return hrPerAb < expectedRate * 0.60;
+}
+
+// First-inning run probability (Over/Under 0.5 runs)
+export function firstInningProp(
+  pitcher: PitcherStats,
+  opposingTeamAvg: number,
+): { overPct: number; underPct: number } {
+  const era = parseFloat(pitcher.era) || 4.5;
+  const whip = parseFloat(pitcher.whip) || 1.30;
+  let overPct = 38; // ~38% historical base rate for first-inning run
+  overPct += (whip - 1.30) * 30;
+  overPct += (era - 4.0) * 3;
+  overPct += (opposingTeamAvg - 0.245) * 80;
+  overPct = Math.min(72, Math.max(25, Math.round(overPct)));
+  return { overPct, underPct: 100 - overPct };
 }
 
 // Hit probability (single game, 4 PA assumption)
