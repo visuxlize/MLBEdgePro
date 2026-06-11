@@ -19,6 +19,7 @@ import { GlassCard } from '@/src/components/GlassCard';
 import { TeamLogo } from '@/src/components/TeamLogo';
 import { useSettings } from '@/src/hooks/useSettings';
 import { useAuth } from '@/src/hooks/useAuth';
+import { useSubscription } from '@/src/hooks/useSubscription';
 
 const ALL_TEAMS = [
   { id: 108, name: 'Los Angeles Angels' },
@@ -53,7 +54,7 @@ const ALL_TEAMS = [
   { id: 158, name: 'Milwaukee Brewers' },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
-// ─── Edit Name Modal ─────────────────────────────────────────────────────────
+// ─── Edit Name Modal ──────────────────────────────────────────────────────────
 
 function EditNameModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { user, updateName } = useAuth();
@@ -192,6 +193,7 @@ function ChangePasswordModal({ visible, onClose }: { visible: boolean; onClose: 
 export default function SettingsScreen() {
   const { settings, updateSettings } = useSettings();
   const { user, logOut } = useAuth();
+  const { isPro, plan, expiresAt } = useSubscription();
   const [showNameModal, setShowNameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
@@ -215,40 +217,33 @@ export default function SettingsScreen() {
     value,
     onPress,
     danger,
+    rightElement,
   }: {
     icon: string;
     label: string;
     value?: string;
     onPress: () => void;
     danger?: boolean;
+    rightElement?: React.ReactNode;
   }) => (
     <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={{ marginBottom: 10 }}>
       <GlassCard style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: danger ? 'rgba(235,80,90,0.12)' : 'rgba(255,120,40,0.12)',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: 14,
-          }}
-        >
+        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: danger ? 'rgba(235,80,90,0.12)' : 'rgba(255,120,40,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
           <Ionicons name={icon as any} size={18} color={danger ? '#EB505A' : '#FF7828'} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: danger ? '#EB505A' : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
-            {label}
-          </Text>
-          {!!value && (
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 1 }}>{value}</Text>
-          )}
+          <Text style={{ color: danger ? '#EB505A' : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>{label}</Text>
+          {!!value && <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 1 }}>{value}</Text>}
         </View>
-        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.25)" />
+        {rightElement ?? <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.25)" />}
       </GlassCard>
     </TouchableOpacity>
   );
+
+  // Format expiry date nicely
+  const expiryLabel = expiresAt
+    ? new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
 
   return (
     <AppBackground>
@@ -268,27 +263,18 @@ export default function SettingsScreen() {
                 <Text style={{ color: '#FF7828', fontSize: 15, fontWeight: '700', marginLeft: 2 }}>Back</Text>
               </TouchableOpacity>
 
-              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 4 }}>
-                ACCOUNT
-              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 4 }}>ACCOUNT</Text>
               <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginBottom: 6 }}>Settings</Text>
             </View>
 
-            {/* User info card */}
+            {/* ── User info card ─────────────────────────────────────────── */}
             {user && (
-              <View style={{ paddingHorizontal: 18, marginBottom: 24 }}>
+              <View style={{ paddingHorizontal: 18, marginBottom: 20 }}>
                 <GlassCard style={{ padding: 18 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <LinearGradient
                       colors={['#FFA550', '#FF7828', '#C85014']}
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 16,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 14,
-                      }}
+                      style={{ width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}
                     >
                       <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900' }}>
                         {user.name.charAt(0).toUpperCase()}
@@ -298,12 +284,99 @@ export default function SettingsScreen() {
                       <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>{user.name}</Text>
                       <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 2 }}>{user.email}</Text>
                     </View>
+                    {/* Plan badge */}
+                    <View style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 10,
+                      backgroundColor: isPro ? 'rgba(255,120,40,0.15)' : 'rgba(255,255,255,0.06)',
+                      borderWidth: 1,
+                      borderColor: isPro ? 'rgba(255,120,40,0.40)' : 'rgba(255,255,255,0.10)',
+                    }}>
+                      <Text style={{ color: isPro ? '#FF7828' : 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '900', letterSpacing: 0.8 }}>
+                        {isPro ? '⚡ PRO' : 'FREE'}
+                      </Text>
+                    </View>
                   </View>
                 </GlassCard>
               </View>
             )}
 
-            {/* Account section */}
+            {/* ── Subscription section ───────────────────────────────────── */}
+            <View style={{ paddingHorizontal: 18, marginBottom: 8 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>
+                SUBSCRIPTION
+              </Text>
+
+              {isPro ? (
+                /* Pro user — active plan card */
+                <GlassCard style={{ padding: 18, borderColor: 'rgba(255,120,40,0.30)', marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: 'rgba(255,120,40,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="flash" size={22} color="#FF7828" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#FF7828', fontSize: 16, fontWeight: '800' }}>Edge Pro — Active</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 }}>
+                        {expiryLabel ? `Renews ${expiryLabel}` : 'All features unlocked'}
+                      </Text>
+                    </View>
+                    <Ionicons name="checkmark-circle" size={22} color="#50C882" />
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => router.push('/upgrade' as any)}
+                    activeOpacity={0.75}
+                    style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', backgroundColor: 'rgba(255,255,255,0.04)' }}
+                  >
+                    <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: '600' }}>Manage Subscription</Text>
+                  </TouchableOpacity>
+                </GlassCard>
+              ) : (
+                /* Free user — upgrade CTA */
+                <TouchableOpacity onPress={() => router.push('/upgrade' as any)} activeOpacity={0.85} style={{ marginBottom: 10 }}>
+                  <LinearGradient
+                    colors={['rgba(255,120,40,0.18)', 'rgba(255,100,20,0.10)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,120,40,0.35)', padding: 18 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                      <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: 'rgba(255,120,40,0.20)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="flash" size={22} color="#FF7828" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Upgrade to Edge Pro</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.50)', fontSize: 12, marginTop: 2 }}>
+                          Unlock props, edges & more
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#FF7828', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
+                        <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '900' }}>$4.99</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, textAlign: 'center' }}>/mo</Text>
+                      </View>
+                    </View>
+
+                    {[
+                      'HR, Hit & pitcher K props',
+                      'Edge Report & AI insights',
+                      'Full batter matchup analysis',
+                    ].map((b) => (
+                      <View key={b} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <Ionicons name="checkmark-circle" size={14} color="#50C882" />
+                        <Text style={{ color: 'rgba(255,255,255,0.60)', fontSize: 12 }}>{b}</Text>
+                      </View>
+                    ))}
+
+                    <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
+                      <Text style={{ color: '#FF7828', fontSize: 13, fontWeight: '800' }}>View full plan →</Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* ── Profile section ────────────────────────────────────────── */}
             <View style={{ paddingHorizontal: 18, marginBottom: 8 }}>
               <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>
                 PROFILE
@@ -317,43 +390,24 @@ export default function SettingsScreen() {
               <SettingRow
                 icon="lock-closed-outline"
                 label="Change Password"
-                value="••••••••"
+                value="Update via secure flow"
                 onPress={() => setShowPasswordModal(true)}
               />
             </View>
 
-            {/* Favorite team section header */}
+            {/* Favorite team section */}
             {settings.favoriteTeamId && (
               <View style={{ paddingHorizontal: 18, marginBottom: 16 }}>
                 <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>
                   FAVORITE TEAM
                 </Text>
-                <GlassCard
-                  style={{
-                    padding: 16,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    borderColor: 'rgba(255,120,40,0.35)',
-                  }}
-                >
-                  <TeamLogo
-                    teamId={settings.favoriteTeamId}
-                    teamName={settings.favoriteTeamName ?? ''}
-                    size={48}
-                  />
+                <GlassCard style={{ padding: 16, flexDirection: 'row', alignItems: 'center', borderColor: 'rgba(255,120,40,0.35)' }}>
+                  <TeamLogo teamId={settings.favoriteTeamId} teamName={settings.favoriteTeamName ?? ''} size={48} />
                   <View style={{ marginLeft: 14, flex: 1 }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 }}>
-                      SELECTED TEAM
-                    </Text>
-                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                      {settings.favoriteTeamName}
-                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 }}>SELECTED TEAM</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginTop: 2 }}>{settings.favoriteTeamName}</Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => updateSettings({ favoriteTeamId: null, favoriteTeamName: null })}
-                    activeOpacity={0.7}
-                    style={{ padding: 6 }}
-                  >
+                  <TouchableOpacity onPress={() => updateSettings({ favoriteTeamId: null, favoriteTeamName: null })} activeOpacity={0.7} style={{ padding: 6 }}>
                     <Ionicons name="close-circle" size={22} color="rgba(255,255,255,0.3)" />
                   </TouchableOpacity>
                 </GlassCard>
@@ -375,24 +429,9 @@ export default function SettingsScreen() {
               activeOpacity={0.75}
               style={{ paddingHorizontal: 18, marginBottom: 8 }}
             >
-              <GlassCard
-                style={[
-                  { padding: 14, flexDirection: 'row', alignItems: 'center' },
-                  isSelected && { borderColor: 'rgba(255,120,40,0.4)' },
-                ]}
-              >
+              <GlassCard style={[{ padding: 14, flexDirection: 'row', alignItems: 'center' }, isSelected && { borderColor: 'rgba(255,120,40,0.4)' }]}>
                 <TeamLogo teamId={team.id} teamName={team.name} size={38} />
-                <Text
-                  style={{
-                    color: '#FFFFFF',
-                    fontSize: 14,
-                    fontWeight: isSelected ? '700' : '500',
-                    marginLeft: 14,
-                    flex: 1,
-                  }}
-                >
-                  {team.name}
-                </Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: isSelected ? '700' : '500', marginLeft: 14, flex: 1 }}>{team.name}</Text>
                 {isSelected && <Ionicons name="checkmark-circle" size={22} color="#FF7828" />}
               </GlassCard>
             </TouchableOpacity>
@@ -401,25 +440,8 @@ export default function SettingsScreen() {
         ListFooterComponent={
           <View style={{ paddingHorizontal: 18, marginTop: 24, marginBottom: 50 }}>
             <TouchableOpacity onPress={handleLogout} activeOpacity={0.75}>
-              <GlassCard
-                style={{
-                  padding: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  borderColor: 'rgba(235,80,90,0.25)',
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: 'rgba(235,80,90,0.12)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 14,
-                  }}
-                >
+              <GlassCard style={{ padding: 16, flexDirection: 'row', alignItems: 'center', borderColor: 'rgba(235,80,90,0.25)' }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(235,80,90,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
                   <Ionicons name="log-out-outline" size={18} color="#EB505A" />
                 </View>
                 <Text style={{ color: '#EB505A', fontSize: 15, fontWeight: '600', flex: 1 }}>Sign Out</Text>

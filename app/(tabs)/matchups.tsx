@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react';
+import { PaywallGate } from '@/src/components/PaywallGate';
+import { useSubscription } from '@/src/hooks/useSubscription';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -26,10 +28,10 @@ interface PropItem {
 
 type Tab = 'matchups' | 'edge' | 'props';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
+const TABS: { id: Tab; label: string; icon: string; pro?: boolean }[] = [
   { id: 'matchups', label: 'Matchups', icon: 'stats-chart-outline' },
-  { id: 'edge', label: 'Edge Report', icon: 'flash-outline' },
-  { id: 'props', label: 'Props', icon: 'person-outline' },
+  { id: 'edge', label: 'Edge Report', icon: 'flash-outline', pro: true },
+  { id: 'props', label: 'Props', icon: 'person-outline', pro: true },
 ];
 
 // ─── Stable renderItem callbacks (module-level, never recreated) ──────────────
@@ -76,6 +78,7 @@ const PropsEmpty = (
 export default function AnalysisScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('matchups');
   const { data: games, isLoading, refetch, isRefetching } = useGames();
+  const { isPro } = useSubscription();
 
   if (isLoading) return <LoadingState message="Loading analysis..." />;
 
@@ -137,14 +140,55 @@ export default function AnalysisScreen() {
 
     if (activeTab === 'edge') {
       return (
+        <PaywallGate
+          feature="Edge Report"
+          benefits={[
+            'Value bets ranked by edge score',
+            'Pitcher vs lineup matchup grades',
+            'Weather & ballpark factor analysis',
+            'AI-powered game insights',
+          ]}
+          minHeight={440}
+        >
+          <Animated.FlatList
+            data={gamesWithPitchers}
+            keyExtractor={gameKeyExtractor}
+            renderItem={renderInsightItem}
+            onScroll={scrollHandler}
+            scrollEventThrottle={scrollEventThrottle}
+            refreshControl={refreshControl}
+            ListEmptyComponent={EdgeEmpty}
+            contentContainerStyle={listStyle}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            initialNumToRender={6}
+          />
+        </PaywallGate>
+      );
+    }
+
+    // Props tab — gated
+    return (
+      <PaywallGate
+        feature="Pitcher Prop Analysis"
+        benefits={[
+          'Strikeout projections with over/under',
+          'K/9, ERA & WHIP breakdown',
+          'Matchup-adjusted projections',
+          'Add pitcher props to your slip',
+        ]}
+        minHeight={440}
+      >
         <Animated.FlatList
-          data={gamesWithPitchers}
-          keyExtractor={gameKeyExtractor}
-          renderItem={renderInsightItem}
+          data={propItems}
+          keyExtractor={propKeyExtractor}
+          renderItem={renderPropItem}
           onScroll={scrollHandler}
           scrollEventThrottle={scrollEventThrottle}
           refreshControl={refreshControl}
-          ListEmptyComponent={EdgeEmpty}
+          ListEmptyComponent={PropsEmpty}
           contentContainerStyle={listStyle}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
@@ -152,26 +196,7 @@ export default function AnalysisScreen() {
           windowSize={5}
           initialNumToRender={6}
         />
-      );
-    }
-
-    // Props tab
-    return (
-      <Animated.FlatList
-        data={propItems}
-        keyExtractor={propKeyExtractor}
-        renderItem={renderPropItem}
-        onScroll={scrollHandler}
-        scrollEventThrottle={scrollEventThrottle}
-        refreshControl={refreshControl}
-        ListEmptyComponent={PropsEmpty}
-        contentContainerStyle={listStyle}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews
-        maxToRenderPerBatch={8}
-        windowSize={5}
-        initialNumToRender={6}
-      />
+      </PaywallGate>
     );
   };
 
@@ -211,6 +236,9 @@ export default function AnalysisScreen() {
                   <View style={{ paddingVertical: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 5 }}>
                     <Ionicons name={tab.icon as any} size={14} color="rgba(255,255,255,0.35)" />
                     <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '600' }}>{tab.label}</Text>
+                    {tab.pro && !isPro && (
+                      <Ionicons name="lock-closed" size={10} color="rgba(255,120,40,0.60)" />
+                    )}
                   </View>
                 )}
               </TouchableOpacity>

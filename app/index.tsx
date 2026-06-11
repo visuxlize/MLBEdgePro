@@ -1,13 +1,14 @@
 import { Redirect } from 'expo-router';
-import { useAuth } from '@/src/hooks/useAuth';
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
+import { useOnboardingState } from '@/src/hooks/useOnboardingState';
 
 export default function Index() {
-  const { isAuthenticated, isLoaded, hasSeenOnboarding } = useAuth();
+  const { isLoaded: authLoaded, isSignedIn } = useClerkAuth();
+  const { hasSeenOnboarding, isLoaded: onboardingLoaded } = useOnboardingState();
 
-  // Wait for both auth and onboarding state to resolve
-  if (!isLoaded) return null;
+  if (!authLoaded || !onboardingLoaded) return null;
 
   if (!hasSeenOnboarding) return <Redirect href={'/onboarding' as any} />;
-  if (!isAuthenticated) return <Redirect href={'/auth/login' as any} />;
+  if (!isSignedIn) return <Redirect href={'/auth/login' as any} />;
   return <Redirect href="/(tabs)/games" />;
 }

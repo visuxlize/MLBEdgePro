@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Linking,
   Modal,
   ScrollView,
   Text,
@@ -23,6 +24,7 @@ import { TeamLogo } from '@/src/components/TeamLogo';
 import { PlayerHeadshot } from '@/src/components/PlayerHeadshot';
 import { useSettings } from '@/src/hooks/useSettings';
 import { useAuth } from '@/src/hooks/useAuth';
+import { useSubscription } from '@/src/hooks/useSubscription';
 import { useTabBarScroll } from '@/src/hooks/useTabBarScroll';
 import { useSavedSlips } from '@/src/hooks/useSavedSlips';
 import { TAB_BAR_HEIGHT } from '@/src/components/LiquidGlassTabBar';
@@ -30,6 +32,8 @@ import { impliedAmericanOdds, formatCombinedPct, parlayAmericanOdds, type SavedS
 import { router } from 'expo-router';
 
 const { height: SCREEN_H } = Dimensions.get('window');
+
+const STRIPE_PORTAL_URL = 'https://billing.stripe.com/p/login/bpc_1TeVcwDcySthi9PMZiJKNs66';
 
 const ALL_TEAMS = [
   { id: 108, name: 'Los Angeles Angels' },
@@ -679,11 +683,19 @@ function SlipHistoryCard({ slip, onPress }: { slip: SavedSlip; onPress: () => vo
 export default function SettingsTabScreen() {
   const { settings, updateSettings } = useSettings();
   const { user, logOut } = useAuth();
+  const { isPro, plan } = useSubscription();
   const { scrollHandler, scrollEventThrottle } = useTabBarScroll();
   const { slips, won, lost, pending, winRate, markOutcome, update, remove } = useSavedSlips();
   const [showNameModal, setShowNameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState<SavedSlip | null>(null);
+
+  const handleManageSubscription = () => {
+    const url = user?.email
+      ? `${STRIPE_PORTAL_URL}?prefilled_email=${encodeURIComponent(user.email)}`
+      : STRIPE_PORTAL_URL;
+    Linking.openURL(url);
+  };
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -772,6 +784,74 @@ export default function SettingsTabScreen() {
               </View>
               <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.2)" />
             </TouchableOpacity>
+          </GlassCard>
+        </View>
+
+        {/* ─── Subscription ────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>SUBSCRIPTION</Text>
+          <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
+            {/* Current plan row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+              <View style={{
+                width: 34, height: 34, borderRadius: 10,
+                backgroundColor: isPro ? 'rgba(255,120,40,0.12)' : 'rgba(255,255,255,0.06)',
+                alignItems: 'center', justifyContent: 'center', marginRight: 14,
+              }}>
+                <Ionicons name={isPro ? 'flash' : 'person-outline'} size={16} color={isPro ? '#FF7828' : 'rgba(255,255,255,0.35)'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>Current Plan</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                  <View style={{
+                    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6,
+                    backgroundColor: isPro ? 'rgba(255,120,40,0.15)' : 'rgba(255,255,255,0.07)',
+                    borderWidth: 1,
+                    borderColor: isPro ? 'rgba(255,120,40,0.35)' : 'rgba(255,255,255,0.10)',
+                  }}>
+                    <Text style={{ color: isPro ? '#FF7828' : 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                      {isPro ? 'PRO' : 'FREE'}
+                    </Text>
+                  </View>
+                  {isPro && (
+                    <Text style={{ color: 'rgba(255,255,255,0.30)', fontSize: 11 }}>$14.99 / month</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Manage / Upgrade row */}
+            {isPro ? (
+              <TouchableOpacity
+                onPress={handleManageSubscription}
+                activeOpacity={0.75}
+                style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(235,80,90,0.10)', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                  <Ionicons name="card-outline" size={16} color="#EB505A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#EB505A', fontSize: 15, fontWeight: '600' }}>Manage Subscription</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.30)', fontSize: 12, marginTop: 1 }}>Cancel, update billing & more</Text>
+                </View>
+                <Ionicons name="open-outline" size={15} color="rgba(235,80,90,0.50)" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => router.push('/upgrade' as any)}
+                activeOpacity={0.75}
+                style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,120,40,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                  <Ionicons name="flash-outline" size={16} color="#FF7828" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FF7828', fontSize: 15, fontWeight: '600' }}>Upgrade to Pro</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.30)', fontSize: 12, marginTop: 1 }}>Unlock every edge from $4.99/mo</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color="rgba(255,120,40,0.40)" />
+              </TouchableOpacity>
+            )}
           </GlassCard>
         </View>
 

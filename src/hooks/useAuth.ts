@@ -1,185 +1,208 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useState, useEffect, useCallback } from 'react';
+/**
+ * useAuth — wraps Clerk SDK and exposes a stable interface that the rest of
+ * the app (login, signup, settings, games, etc.) depends on.
+ *
+ * Subscription status lives in useSubscription.ts (reads Clerk publicMetadata).
+ */
 
-const USERS_KEY = '@mlbedgepro_users';
-const CURRENT_KEY = '@mlbedgepro_current';
-const ONBOARDING_KEY = '@mlbedgepro_onboarding_seen';
+import {
+  useUser,
+  useSignIn,
+  useSignUp,
+  useAuth as useClerkAuth,
+  useClerk,
+} from '@clerk/clerk-expo';
+import { useOnboardingState } from './useOnboardingState';
+
+// ─── Public shape (backward-compatible with the old AsyncStorage hook) ─────────
 
 export interface AuthUser {
   email: string;
   name: string;
-  password: string; // stored locally — no server
   createdAt: string;
-  hasAcceptedTerms?: boolean;
 }
 
-interface AuthState {
-  user: AuthUser | null;
-  isLoaded: boolean;
-  hasSeenOnboarding: boolean;
-}
-
-// ─── Storage helpers ──────────────────────────────────────────────────────────
-
-async function readUsers(): Promise<AuthUser[]> {
-  try {
-    const raw = await AsyncStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeUsers(users: AuthUser[]) {
-  await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-async function readCurrentEmail(): Promise<string | null> {
-  try {
-    return await AsyncStorage.getItem(CURRENT_KEY);
-  } catch {
-    return null;
-  }
-}
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    isLoaded: false,
-    hasSeenOnboarding: false,
-  });
+  const { user, isLoaded: userLoaded } = useUser();
+  const { isLoaded: authLoaded, isSignedIn } = useClerkAuth();
+  const { signOut } = useClerk();
+  const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
+  const { signUp: clerkSignUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
+  const {
+    hasSeenOnboarding,
+    isLoaded: onboardingLoaded,
+    markOnboardingComplete,
+  } = useOnboardingState();
 
-  // Boot: restore logged-in user + onboarding flag in parallel
-  useEffect(() => {
-    (async () => {
-      const [onboardingVal, email] = await Promise.all([
-        AsyncStorage.getItem(ONBOARDING_KEY).catch(() => null),
-        readCurrentEmail(),
-      ]);
-      const hasSeenOnboarding = onboardingVal === 'true';
+  const isLoaded = authLoaded && userLoaded && onboardingLoaded;
 
-      if (!email) {
-        setState({ user: null, isLoaded: true, hasSeenOnboarding });
-        return;
+  // ── Normalize Clerk user → AuthUser shape ─────────────────────────────────
+  const authUser: AuthUser | null = user
+    ? {
+        email: user.primaryEmailAddress?.emailAddress ?? '',
+        name:
+          [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+          user.username ||
+          'User',
+        createdAt: user.createdAt?.toISOString() ?? new Date().toISOString(),
       }
+    : null;
 
-      const users = await readUsers();
-      const found = users.find((u) => u.email === email) ?? null;
-      setState({ user: found, isLoaded: true, hasSeenOnboarding });
-    })();
-  }, []);
-
-  const markOnboardingComplete = useCallback(async () => {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    setState((s) => ({ ...s, hasSeenOnboarding: true }));
-  }, []);
-
-  const signUp = useCallback(
-    async (
-      name: string,
-      email: string,
-      password: string,
-      acceptedTerms = false,
-    ): Promise<{ ok: true } | { ok: false; error: string }> => {
-      const trimEmail = email.trim().toLowerCase();
-      if (!trimEmail || !password || !name.trim()) {
-        return { ok: false, error: 'All fields are required.' };
-      }
-      if (password.length < 6) {
-        return { ok: false, error: 'Password must be at least 6 characters.' };
-      }
-      if (!acceptedTerms) {
-        return { ok: false, error: 'You must accept the Terms of Service and Privacy Policy.' };
-      }
-      const users = await readUsers();
-      if (users.find((u) => u.email === trimEmail)) {
-        return { ok: false, error: 'An account with that email already exists.' };
-      }
-      const newUser: AuthUser = {
-        email: trimEmail,
-        name: name.trim(),
+  // ── Sign in ───────────────────────────────────────────────────────────────
+  const logIn = async (
+    email: string,
+    password: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!signIn || !setSignInActive) return { ok: false, error: 'Auth not ready.' };
+    try {
+      const result = await signIn.create({
+        identifier: email.trim().toLowerCase(),
         password,
-        createdAt: new Date().toISOString(),
-        hasAcceptedTerms: true,
+      });
+      if (result.status === 'complete') {
+        await setSignInActive({ session: result.createdSessionId });
+        return { ok: true };
+      }
+      return { ok: false, error: 'Sign in incomplete. Please try again.' };
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ??
+        err?.errors?.[0]?.message ??
+        err?.message ??
+        'Sign in failed. Check your credentials.';
+      return { ok: false, error: msg };
+    }
+  };
+
+  // ── Sign up (returns needsVerification=true when email OTP is required) ───
+  const signUp = async (
+    name: string,
+    email: string,
+    password: string,
+    acceptedTerms = false,
+  ): Promise<
+    | { ok: true; needsVerification?: boolean }
+    | { ok: false; error: string }
+  > => {
+    if (!clerkSignUp || !setSignUpActive)
+      return { ok: false, error: 'Auth not ready.' };
+    if (!acceptedTerms)
+      return {
+        ok: false,
+        error: 'You must accept the Terms of Service and Privacy Policy.',
       };
-      await writeUsers([...users, newUser]);
-      await AsyncStorage.setItem(CURRENT_KEY, trimEmail);
-      setState((s) => ({ ...s, user: newUser }));
-      return { ok: true };
-    },
-    [],
-  );
 
-  const logIn = useCallback(
-    async (
-      email: string,
-      password: string,
-    ): Promise<{ ok: true } | { ok: false; error: string }> => {
-      const trimEmail = email.trim().toLowerCase();
-      const users = await readUsers();
-      const found = users.find((u) => u.email === trimEmail);
-      if (!found) return { ok: false, error: 'No account found with that email.' };
-      if (found.password !== password) return { ok: false, error: 'Incorrect password.' };
-      await AsyncStorage.setItem(CURRENT_KEY, trimEmail);
-      setState((s) => ({ ...s, user: found }));
-      return { ok: true };
-    },
-    [],
-  );
+    const parts = name.trim().split(/\s+/);
+    const firstName = parts[0] ?? '';
+    const lastName = parts.slice(1).join(' ') || undefined;
 
-  const logOut = useCallback(async () => {
-    await AsyncStorage.removeItem(CURRENT_KEY);
-    setState((s) => ({ ...s, user: null }));
-  }, []);
+    try {
+      const result = await clerkSignUp.create({
+        emailAddress: email.trim().toLowerCase(),
+        password,
+        firstName,
+        lastName,
+      });
 
-  const updateName = useCallback(
-    async (newName: string): Promise<{ ok: true } | { ok: false; error: string }> => {
-      if (!state.user) return { ok: false, error: 'Not logged in.' };
-      if (!newName.trim()) return { ok: false, error: 'Name cannot be empty.' };
-      const users = await readUsers();
-      const updated = users.map((u) =>
-        u.email === state.user!.email ? { ...u, name: newName.trim() } : u,
-      );
-      await writeUsers(updated);
-      const updatedUser = { ...state.user, name: newName.trim() };
-      setState((s) => ({ ...s, user: updatedUser }));
-      return { ok: true };
-    },
-    [state.user],
-  );
-
-  const updatePassword = useCallback(
-    async (
-      currentPassword: string,
-      newPassword: string,
-    ): Promise<{ ok: true } | { ok: false; error: string }> => {
-      if (!state.user) return { ok: false, error: 'Not logged in.' };
-      if (state.user.password !== currentPassword) {
-        return { ok: false, error: 'Current password is incorrect.' };
+      if (result.status === 'complete') {
+        await setSignUpActive({ session: result.createdSessionId });
+        return { ok: true };
       }
-      if (newPassword.length < 6) {
-        return { ok: false, error: 'New password must be at least 6 characters.' };
+
+      // Needs email verification
+      if (result.status === 'missing_requirements') {
+        await clerkSignUp.prepareEmailAddressVerification({
+          strategy: 'email_code',
+        });
+        return { ok: true, needsVerification: true };
       }
-      const users = await readUsers();
-      const updated = users.map((u) =>
-        u.email === state.user!.email ? { ...u, password: newPassword } : u,
-      );
-      await writeUsers(updated);
-      setState((s) => ({ ...s, user: { ...s.user!, password: newPassword } }));
+
+      return { ok: false, error: 'Signup incomplete. Please try again.' };
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ??
+        err?.errors?.[0]?.message ??
+        err?.message ??
+        'Signup failed. Please try again.';
+      return { ok: false, error: msg };
+    }
+  };
+
+  // ── Verify email OTP ──────────────────────────────────────────────────────
+  const verifyEmail = async (
+    code: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!clerkSignUp || !setSignUpActive)
+      return { ok: false, error: 'Auth not ready.' };
+    try {
+      const result = await clerkSignUp.attemptEmailAddressVerification({ code });
+      if (result.status === 'complete') {
+        await setSignUpActive({ session: result.createdSessionId });
+        return { ok: true };
+      }
+      return { ok: false, error: 'Verification incomplete.' };
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ??
+        err?.errors?.[0]?.message ??
+        err?.message ??
+        'Invalid code. Please try again.';
+      return { ok: false, error: msg };
+    }
+  };
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+  const logOut = async () => {
+    await signOut();
+  };
+
+  // ── Update display name ───────────────────────────────────────────────────
+  const updateName = async (
+    newName: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!user) return { ok: false, error: 'Not logged in.' };
+    if (!newName.trim()) return { ok: false, error: 'Name cannot be empty.' };
+    try {
+      const parts = newName.trim().split(/\s+/);
+      await user.update({
+        firstName: parts[0],
+        lastName: parts.slice(1).join(' ') || undefined,
+      });
       return { ok: true };
-    },
-    [state.user],
-  );
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? 'Update failed.' };
+    }
+  };
+
+  // ── Update password ───────────────────────────────────────────────────────
+  const updatePassword = async (
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!user) return { ok: false, error: 'Not logged in.' };
+    if (newPassword.length < 8)
+      return { ok: false, error: 'New password must be at least 8 characters.' };
+    try {
+      await user.updatePassword({ currentPassword, newPassword });
+      return { ok: true };
+    } catch (err: any) {
+      const msg =
+        err?.errors?.[0]?.longMessage ?? err?.message ?? 'Password update failed.';
+      return { ok: false, error: msg };
+    }
+  };
 
   return {
-    user: state.user,
-    isLoaded: state.isLoaded,
-    isAuthenticated: !!state.user,
-    hasSeenOnboarding: state.hasSeenOnboarding,
+    user: authUser,
+    clerkUser: user,
+    isLoaded,
+    isAuthenticated: !!isSignedIn,
+    hasSeenOnboarding,
     markOnboardingComplete,
     signUp,
+    verifyEmail,
     logIn,
     logOut,
     updateName,
